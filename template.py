@@ -2,16 +2,20 @@
 # DyHeredia@mednet.ucla.edu
 # July 3, 2025
 
-import streamlit as st          # Loads Streamlit GUI
-from docx import Document       # For working with .docx documents
-from docx.shared import Pt      # For setting font size
-from io import BytesIO          # To hold input/output memory for download
-from docx.enum.text import WD_ALIGN_PARAGRAPH       # To align text
-from docx.enum.text import WD_LINE_SPACING          # Control line spacing 
-from docx.oxml.ns import qn     # To enable .font.name update
-# import json                   # Saving so that page refresh doesn't lose entries data
-# import os                     # For file management
+# Perhaps a more viable solution for 15-20 page documents (less data to process).
 
+import streamlit as st              # Loads Streamlit GUI
+from docx import Document           # For working with .docx documents
+from docx.shared import Pt          # For setting font size
+from docx.shared import Inches      # To create tables and adjust horizontal spacing
+from io import BytesIO              # To hold input/output memory for download
+from docx.enum.text import WD_ALIGN_PARAGRAPH       # To align text
+from docx.enum.text import WD_LINE_SPACING          # To adjust vertical line spacing 
+from docx.enum.text import WD_BREAK                 # Insert page break
+from docx.oxml.ns import qn         # To enable .font.name update
+from docx.oxml import OxmlElement   # Used to manually adjust width
+# import json                       # Saving so that page refresh doesn't lose entries data
+# import os                         # For file management
 
 # Initialize all_cvs (multi-CV manager) and current cv name
 if "all_cvs" not in st.session_state:
@@ -22,11 +26,12 @@ if "current_cv" not in st.session_state:
 # If first load, create Default_CV
 if st.session_state.current_cv not in st.session_state.all_cvs:
     st.session_state.all_cvs[st.session_state.current_cv] = {
-        "BUSINESS INFORMATION": [                        # New section
-            {"name": "", "position": "", "order": 1, "business_phone": "", "email": "", },
+        "BUSINESS INFORMATION": [
+            {"name": "", "position": "", "order": 1, "company_name": "",
+            "busineess_address": "", "business_phone": "", "email": "", },
         ],
-        "EDUCATION": [                                   # KEY: "EDUCATION"
-            {"degree": "", "year": "", "order": 1},      # Dictionary
+        "EDUCATION": [
+            {"degree": "", "year": "", "order": 1, "school": ""},      # Dictionary
         ]
     }
 
@@ -59,13 +64,14 @@ if st.sidebar.button("Create New CV"):
 
 st.header("BUSINESS INFORMATION")
 
-# Iterate over BUSINESS INFORMATION entries
+# Iterate over BUSINESS INFORMATION textboxes
 for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [])):
-    position_display = entry["position"].strip() if entry["position"].strip() else ""
-    with st.expander(f"Entry {i+1}: {position_display}"):
+    name_display = entry["name"].strip() or ""
+    with st.expander(f"Entry {i+1}: {name_display}"):
         with st.form(f"biz_form_{st.session_state.current_cv}_{i}"):
-            new_name = st.text_input("Name", value=entry["name"], key=f"name_{st.session_state.current_cv}_{i}")
-            new_position = st.text_input("Degree", value=entry["position"], key=f"position_{st.session_state.current_cv}_{i}")
+            new_name = st.text_input("Name", value=entry.get("name", ""), key=f"name_{st.session_state.current_cv}_{i}")
+            new_position = st.text_input("Degree", value=entry.get("position", ""), key=f"position_{st.session_state.current_cv}_{i}")
+            new_company = st.text_input("Company Name", value=entry.get("busineess_address", ""), key=f"company_{st.session_state.current_cv}_{i}")
             new_address = st.text_input("Business Address", value=entry.get("business_address", ""), key=f"address_{st.session_state.current_cv}_{i}")
             new_phone = st.text_input("Business Phone", value=entry.get("business_phone", ""), key=f"phone_{st.session_state.current_cv}_{i}")
             new_email = st.text_input("Email", value=entry.get("email", ""), key=f"email_{st.session_state.current_cv}_{i}")
@@ -73,6 +79,7 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
             if submitted:
                 entry["name"] = new_name
                 entry["position"] = new_position
+                entry["company_name"] = new_company
                 entry["business_address"] = new_address
                 entry["business_phone"] = new_phone
                 entry["email"] = new_email
@@ -80,22 +87,15 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
         
 st.header("EDUCATION")      # Header in GUI
 
-# For new Entry
-if st.button("Add Entry", key="add_entry_EDUCATION"):
-    st.session_state.cv_data.setdefault("EDUCATION", []).append({
-        "degree": "",
-        "year": "",
-        "order": len(st.session_state.cv_data.get("EDUCATION", [])) + 1
-    })
-    st.rerun()
-
-# Setting up incrementation + User input feature + Delete entry and confirmation
+# EDUCATION: Incrementation + User input feature + Delete entry and confirmation for
 for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
     degree_display = entry["degree"].strip() or ""
-    with st.expander(f"Entry {i+1}: {degree_display}"):
+    year_display = entry["year"].strip() or ""
+    with st.expander(f"Entry {i+1}: {year_display} {degree_display}"):
         with st.form(f"form_{st.session_state.current_cv}_{i}"):
-            new_degree = st.text_input("Degree", value=entry["degree"], key=f"degree_{st.session_state.current_cv}_degree_{i}")
-            new_year = st.text_input("Year", value=entry["year"], key=f"year_{st.session_state.current_cv}_year_{i}")
+            new_degree = st.text_input("Degree", value=entry.get("degree", ""), key=f"degree_{st.session_state.current_cv}_degree_{i}")
+            new_year = st.text_input("Year (Ex: 2000-2004)", value=entry.get("year", ""), key=f"year_{st.session_state.current_cv}_year_{i}")
+            new_school = st.text_input("University Name", value=entry.get("school", ""), key=f"school_{st.session_state.current_cv}_school_{i}")
             submitted = st.form_submit_button("Update Entry")
 
             # Initialize delete confirmation flag if not present
@@ -123,14 +123,25 @@ for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
             if submitted:
                 entry["degree"] = new_degree
                 entry["year"] = new_year
+                entry["school"] = new_school
                 st.rerun()
 
+# For new Entry
+if st.button("Add Entry", key="add_entry_EDUCATION"):
+    st.session_state.cv_data.setdefault("EDUCATION", []).append({
+        "degree": "",
+        "year": "",
+        "order": len(st.session_state.cv_data.get("EDUCATION", [])) + 1
+    })
+    st.rerun()
+
+st.header("LECTURES AND PRESENTATIONS")
+
+
+
+st.header("BIBLIOGRAPHY")
+
 # Preview button
-
-
-
-
-
 
 # Generate .docx and download button
 def generate_docx(data):
@@ -179,23 +190,28 @@ def generate_docx(data):
 
     # BUSINESS INFORMATION entries
     for entry in sorted(data.get("BUSINESS INFORMATION", []), key=lambda x: x["order"]):
+        company = entry.get("company_name", "").strip() or "Company Missing"
         address = entry.get("business_address", "").strip() or "Address Missing"
         phone = entry.get("business_phone", "").strip() or "Phone Missing"
         email = entry.get("email", "").strip() or "Email Missing"
 
         para = doc.add_paragraph()
         para.paragraph_format.left_indent = Pt(18)
-        run = para.add_run(address)
-        run.add_break()  # Line break after address
-        run.add_text(f"Phone: {phone}")
-        run.add_break()  # Line break after phone
-        run.add_text(f"Email: {email}")
-        run.font.name = 'Times New Roman'
-        run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-        run.font.size = Pt(12)
-        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        para.paragraph_format.space_after = Pt(0)
 
+        lines = [company, address, f"Phone: {phone}", f"Email: {email}"]
+
+        for i, line in enumerate(lines):
+            run = para.add_run(line)
+            run.font.name = 'Times New Roman'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+            run.font.size = Pt(12)
+            if i < len(lines) - 1:
+                run.add_break()
+
+        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        para.paragraph_format.space_before= Pt(0)
+        para.paragraph_format.space_after = Pt(0)
+        
     # EDUCATION section header
     edu_para = doc.add_paragraph()
     edu_run = edu_para.add_run("EDUCATION")
@@ -206,20 +222,70 @@ def generate_docx(data):
     edu_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
     edu_para.paragraph_format.space_after = Pt(3)
     edu_para.paragraph_format.space_before = Pt(16)
-    
-    # EDUCATION entries
-    for entry in sorted(data["EDUCATION"], key=lambda x: x["order"]):
-        year = entry["year"].strip() or "Year (missing)"
-        degree = entry["degree"].strip() or "Degree (missing)"
 
-        para = doc.add_paragraph()
-        para.paragraph_format.left_indent = Pt(18)
-        run = para.add_run(f"{year}         {degree}, [insert school information]")
-        run.font.name = 'Times New Roman'
-        run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-        run.font.size = Pt(12)
-        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        para.paragraph_format.space_after = Pt(0)
+    # EDUCATION entries
+    # Create table with 3 columns: Year, Degree, School
+    table = doc.add_table(rows=0, cols=3)
+    para.paragraph_format.left_indent = Pt(18)          # Match Business Info indentation
+    
+    # Set column width in inches
+    col_widths = [1.15, 0.5, 4.85]  # 8.5" - (1" margin x 2) = 6.5" usable
+
+   # Add data rows for EDUCATION
+    for entry in sorted(data["EDUCATION"], key=lambda x: x["order"]):
+        year = entry["year"].strip()
+        degree = entry["degree"].strip()
+        school = entry["school"].strip()
+
+        # Skip completely blank entries
+        if not any([year, degree, school]):
+            continue
+
+        year = year or "Year (missing)"
+        degree = degree or "Degree (missing)"
+        school = school or "School (missing)"
+
+        row_cells = table.add_row().cells
+        row_data = [year, degree, school]
+
+        for i, (cell, text) in enumerate(zip(row_cells, row_data)):
+            # Set cell text
+            paragraph = cell.paragraphs[0]
+            run = paragraph.add_run(text)
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(12)
+            paragraph.paragraph_format.space_after = Pt(0)
+            paragraph.paragraph_format.space_before = Pt(0)
+
+            # Set column width via XML
+            tc = cell._tc
+            tcPr = tc.get_or_add_tcPr()
+            tcW = OxmlElement('w:tcW')
+            tcW.set(qn('w:w'), str(int(col_widths[i] * 1440)))  # twips: 1 inch = 1440 twips
+            tcW.set(qn('w:type'), 'dxa')
+            tcPr.append(tcW)
+
+    # Apply left indentation to all paragraphs in the table
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                paragraph.paragraph_format.left_indent = Pt(16)
+
+    # Page break before BIBLIOGRAPHY page
+    page_break_para = doc.add_paragraph()
+    page_break_run = page_break_para.add_run()
+    page_break_run.add_break(WD_BREAK.PAGE)
+
+    # BIBLIOGRAPHY section header
+    bib_para = doc.add_paragraph()
+    bib_run = bib_para.add_run("BIBLIOGRAPHY")
+    bib_run.font.name = 'Times New Roman'
+    bib_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+    bib_run.font.size = Pt(12)
+    bib_run.font.bold = True
+    bib_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    bib_para.paragraph_format.space_after = Pt(3)
+    bib_para.paragraph_format.space_before = Pt(16)
 
     # Save to buffer
     buffer = BytesIO()
