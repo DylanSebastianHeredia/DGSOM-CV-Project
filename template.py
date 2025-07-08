@@ -4,17 +4,6 @@
 
 # Perhaps a more viable solution for 15-20 page documents (less data to process).
 
-# Firebase syncing
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-# Use your downloaded JSON key
-cred = credentials.Certificate("dgsom-template.json")
-firebase_admin.initialize_app(cred)
-
-# Connect to Firestore
-db = firestore.client()
-
 import streamlit as st              # Loads Streamlit GUI
 from docx import Document           # For working with .docx documents
 from docx.shared import Pt          # For setting font size
