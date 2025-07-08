@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#27A0AE"             # UCLA Gold — for buttons, sliders, links
+backgroundColor = "#FFFFFF"          # White background for the main page
+secondaryBackgroundColor = "#F2F2F2" # Light gray sidebar
+textColor = "#2774AE"                # UCLA Blue for text
+font = "helvetica"
