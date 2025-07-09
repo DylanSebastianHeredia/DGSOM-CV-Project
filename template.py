@@ -28,7 +28,7 @@ if st.session_state.current_cv not in st.session_state.all_cvs:
     st.session_state.all_cvs[st.session_state.current_cv] = {
         "BUSINESS INFORMATION": [
             {"name": "", "position": "", "order": 1, "company_name": "",
-            "business_address": "", "business_phone": "", "email": "", },
+            "businee=ss_address": "", "business_phone": "", "email": "", },
         ],
         "EDUCATION": [
             {"degree": "", "year": "", "order": 1, "school": ""},      # Dictionary
