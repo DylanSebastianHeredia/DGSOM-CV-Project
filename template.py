@@ -88,7 +88,7 @@ selected_cv = st.sidebar.selectbox("Select CV", cv_list, index=cv_list.index(st.
 if selected_cv != st.session_state.current_cv:
    st.session_state.current_cv = selected_cv
    st.session_state.cv_data = st.session_state.all_cvs[selected_cv]
-   st.experimental_rerun()
+   st.rerun()
 
 
 new_cv_name = st.sidebar.text_input("New CV name (no spaces):")
@@ -107,7 +107,7 @@ if st.sidebar.button("Create New CV"):
        st.session_state.cv_data = st.session_state.all_cvs[new_cv_name]
        save_to_firebase()
        st.success(f"New CV '{new_cv_name}' created.")
-       st.experimental_rerun()
+       st.rerun()
    else:
        st.sidebar.warning("Enter a unique CV name.")
 
@@ -127,7 +127,7 @@ with st.sidebar.expander("Rename CV"):
                st.session_state.current_cv = new_CVname
                save_to_firebase()
                st.success(f"Renamed to '{new_CVname}'")
-               st.experimental_rerun()
+               st.rerun()
 
 
 # Delete CV with confirmation
@@ -143,7 +143,7 @@ if delete_cv_flag_key not in st.session_state:
 if not st.session_state[delete_cv_flag_key]:
    if st.sidebar.button(f'Delete "{st.session_state.current_cv}"'):
        st.session_state[delete_cv_flag_key] = True
-       st.experimental_rerun()
+       st.rerun()
 else:
    st.sidebar.write(f"Are you sure you want to delete '{st.session_state.current_cv}'?")
    confirm = st.sidebar.button("Yes, delete")
@@ -168,10 +168,10 @@ else:
            st.session_state.current_cv = "Default_CV"
        st.session_state.cv_data = st.session_state.all_cvs[st.session_state.current_cv]
        st.session_state.pop(delete_cv_flag_key, None)
-       st.experimental_rerun()
+       st.rerun()
    if cancel:
        st.session_state[delete_cv_flag_key] = False
-       st.experimental_rerun()
+       st.rerun()
 
 
 # BUSINESS INFORMATION Section
@@ -197,7 +197,7 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
                entry["business_phone"] = new_phone
                entry["email"] = new_email
                save_to_firebase()
-               st.experimental_rerun()
+               st.rerun()
 
 
 # EDUCATION Section
@@ -224,7 +224,7 @@ for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
                delete_clicked = st.form_submit_button("Delete Entry")
                if delete_clicked:
                    st.session_state[flag_key] = True
-                   st.experimental_rerun()
+                   st.rerun()
            else:
                st.write("Are you sure you want to delete this entry?")
                confirm = st.form_submit_button("Yes, delete")
@@ -233,10 +233,10 @@ for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
                    st.session_state.cv_data["EDUCATION"].pop(i)
                    st.session_state.pop(flag_key, None)
                    save_to_firebase()
-                   st.experimental_rerun()
+                   st.rerun()
                if cancel:
                    st.session_state[flag_key] = False
-                   st.experimental_rerun()
+                   st.rerun()
 
 
            if submitted:
@@ -244,7 +244,7 @@ for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
                entry["year"] = new_year
                entry["school"] = new_school
                save_to_firebase()
-               st.experimental_rerun()
+               st.rerun()
 
 
 if st.button("Add Entry", key="add_entry_EDUCATION"):
@@ -255,7 +255,7 @@ if st.button("Add Entry", key="add_entry_EDUCATION"):
        "order": len(st.session_state.cv_data.get("EDUCATION", [])) + 1
    })
    save_to_firebase()
-   st.experimental_rerun()
+   st.rerun()
 
 
 st.header("LECTURES AND PRESENTATIONS")
