@@ -15,6 +15,38 @@ import firebase_admin                       # Sync with Firebase
 from firebase_admin import credentials, db
 
 
+# CCS: Widen sidebar to fit text on laptop, keep collapsable for mobile
+st.markdown(
+    """
+    <style>
+        @media (min-width: 768px) {
+            /* On tablets and desktops, widen the sidebar */
+            [data-testid="stSidebar"][aria-expanded="true"] {
+                width: 400px !important;
+                min-width: 400px !important;
+                max-width: 400px !important;
+            }
+
+            [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+                width: 100% !important;
+            }
+
+            [data-testid="stSidebar"][aria-expanded="false"] {
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: 0 !important;
+            }
+
+            section[data-testid="stSidebar"] {
+                flex-shrink: 0 !important;
+            }
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
 # Initialize Firebase once
 if not firebase_admin._apps:
    cred = credentials.Certificate({
@@ -35,12 +67,8 @@ if not firebase_admin._apps:
    })
 
 
-
-
 def save_to_firebase():
    db.reference("cvs").set(st.session_state.all_cvs)
-
-
 
 
 if "all_cvs" not in st.session_state:
@@ -59,7 +87,8 @@ if st.session_state.current_cv not in st.session_state.all_cvs:
    st.session_state.all_cvs[st.session_state.current_cv] = {
        "BUSINESS INFORMATION": [
            {"name": "", "position": "", "order": 1, "company_name": "",
-            "business_address": "", "business_phone": "", "email": ""}
+            "last_updated": "", "business_address": "", "business_phone": "",
+            "email": ""}
        ],
        "EDUCATION": [
            {"degree": "", "year": "", "order": 1, "school": ""}
@@ -97,7 +126,8 @@ if st.sidebar.button("Create New CV"):
        st.session_state.all_cvs[new_cv_name] = {
            "BUSINESS INFORMATION": [
                {"name": "", "position": "", "order": 1, "company_name": "",
-                "business_address": "", "business_phone": "", "email": ""}
+                "last_updated": "", "business_address": "", "business_phone": "",
+                "email": ""}
            ],
            "EDUCATION": [
                {"degree": "", "year": "", "order": 1, "school": ""}
@@ -159,7 +189,8 @@ else:
            st.session_state.all_cvs["Default_CV"] = {
                "BUSINESS INFORMATION": [
                    {"name": "", "position": "", "order": 1, "company_name": "",
-                    "business_address": "", "business_phone": "", "email": ""}
+                    "last_updated": "", "business_address": "", "business_phone": "",
+                    "email": ""}
                ],
                "EDUCATION": [
                    {"degree": "", "year": "", "order": 1, "school": ""}
@@ -183,7 +214,8 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
    with st.expander(f"Entry {i+1}: {name_display}"):
        with st.form(f"biz_form_{st.session_state.current_cv}_{i}"):
            new_name = st.text_input("Name", value=entry.get("name", ""), key=f"name_{st.session_state.current_cv}_{i}")
-           new_position = st.text_input("Position", value=entry.get("position", ""), key=f"position_{st.session_state.current_cv}_{i}")
+           new_position = st.text_input("Degree(s)", value=entry.get("position", ""), key=f"position_{st.session_state.current_cv}_{i}")
+           new_last_updated = st.text_input("Last Updated", value=entry.get("last_updated", ""), key=f"last_updated_{st.session_state.current_cv}_{i}")
            new_company = st.text_input("Company Name", value=entry.get("company_name", ""), key=f"company_{st.session_state.current_cv}_{i}")
            new_address = st.text_input("Business Address", value=entry.get("business_address", ""), key=f"address_{st.session_state.current_cv}_{i}")
            new_phone = st.text_input("Business Phone", value=entry.get("business_phone", ""), key=f"phone_{st.session_state.current_cv}_{i}")
@@ -192,6 +224,7 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
            if submitted:
                entry["name"] = new_name
                entry["position"] = new_position
+               entry["last_updated"] = new_last_updated
                entry["company_name"] = new_company
                entry["business_address"] = new_address
                entry["business_phone"] = new_phone
@@ -266,181 +299,151 @@ st.header("BIBLIOGRAPHY")
 
 # Generate .docx and download button
 def generate_docx(data):
-   doc = Document()
-  
-   # Pull first business info entry for name/degree
-   biz_info = data.get("BUSINESS INFORMATION", [])
-   name = biz_info[0]["name"].strip() if biz_info else ""
-   degree = biz_info[0].get("position", "").strip() if biz_info else ""
+    doc = Document()
+
+    # Pull first business info entry for name/degree
+    biz_info = data.get("BUSINESS INFORMATION", [])
+    name = biz_info[0]["name"].strip() if biz_info else ""
+    degree = biz_info[0].get("position", "").strip() if biz_info else ""
+    updated = biz_info[0].get("last_updated", "").strip() if biz_info else ""
+
+    name_line = f"{name}, {degree}".strip().rstrip(",")
+    last_updated_line = f"{updated}".strip().rstrip(",")
+
+    lines = [
+        {"text": name_line, "bold": True, "italic": False},
+        {"text": "Curriculum Vitae", "bold": True, "italic": False},
+        {"text": last_updated_line, "bold": False, "italic": True},
+    ]
+
+    for line in lines:
+        para = doc.add_paragraph()
+        run = para.add_run(line["text"])
+        run.font.name = 'Times New Roman'
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+        run.font.size = Pt(12)
+        run.font.bold = line["bold"]
+        run.font.italic = line["italic"]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        para.paragraph_format.space_before = Pt(0)
+        para.paragraph_format.space_after = Pt(0)
+
+    # BUSINESS INFORMATION Header
+    biz_para = doc.add_paragraph()
+    biz_run = biz_para.add_run("BUSINESS INFORMATION")
+    biz_run.font.name = 'Times New Roman'
+    biz_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+    biz_run.font.size = Pt(12)
+    biz_run.font.bold = True
+    biz_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    biz_para.paragraph_format.space_after = Pt(3)
+    biz_para.paragraph_format.space_before = Pt(16)
+
+    # BUSINESS INFORMATION entries
+    for entry in sorted(data.get("BUSINESS INFORMATION", []), key=lambda x: x["order"]):
+        updated = entry.get("last_updated", "").strip() or "Missing Updated Date"
+        company = entry.get("company_name", "").strip() or "Missing Company"
+        address = entry.get("business_address", "").strip() or "Missing Address"
+        phone = entry.get("business_phone", "").strip() or "Missing Phone"
+        email = entry.get("email", "").strip() or "Missing Email"
+
+        para = doc.add_paragraph()
+        para.paragraph_format.left_indent = Pt(18)
+        lines = [updated, company, address, f"Phone: {phone}", f"Email: {email}"]
+
+        for i, line in enumerate(lines):
+            if "Missing" in line:
+                before, after = line.split("Missing", 1)
+                para.add_run(before).font.name = 'Times New Roman'
+                red_run = para.add_run("Missing" + after)
+                red_run.font.name = 'Times New Roman'
+                red_run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
+            else:
+                para.add_run(line).font.name = 'Times New Roman'
+            if i < len(lines) - 1:
+                para.add_run().add_break()
+
+        para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        para.paragraph_format.space_before = Pt(0)
+        para.paragraph_format.space_after = Pt(0)
+
+    # EDUCATION header
+    edu_para = doc.add_paragraph()
+    edu_run = edu_para.add_run("EDUCATION")
+    edu_run.font.name = 'Times New Roman'
+    edu_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+    edu_run.font.size = Pt(12)
+    edu_run.font.bold = True
+    edu_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    edu_para.paragraph_format.space_after = Pt(3)
+    edu_para.paragraph_format.space_before = Pt(16)
+
+    # EDUCATION table with 3 columns
+    table = doc.add_table(rows=0, cols=3)
+    col_widths = [1.15, 1.50, 3.85]  # inches
+
+    for entry in sorted(data["EDUCATION"], key=lambda x: x["order"]):
+        year = entry.get("year", "").strip() or "Year Missing"
+        degree = entry.get("degree", "").strip() or "Degree Missing"
+        school = entry.get("school", "").strip() or "School Missing"
+
+        if not any([year, degree, school]):
+            continue
+
+        row_cells = table.add_row().cells
+        row_data = [year, degree, school]
+
+        for i, (cell, text) in enumerate(zip(row_cells, row_data)):
+            paragraph = cell.paragraphs[0]
+            run = paragraph.add_run(text)
+            if "Missing" in text:
+                run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(12)
+            paragraph.paragraph_format.space_after = Pt(0)
+            paragraph.paragraph_format.space_before = Pt(0)
+
+            # Set column width (in twips)
+            tc = cell._tc
+            tcPr = tc.get_or_add_tcPr()
+            tcW = OxmlElement('w:tcW')
+            tcW.set(qn('w:w'), str(int(col_widths[i] * 1440)))
+            tcW.set(qn('w:type'), 'dxa')
+            tcPr.append(tcW)
+
+    # Left indent for all table paragraphs
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                paragraph.paragraph_format.left_indent = Pt(16)
+
+    # Page break before bibliography
+    page_break_para = doc.add_paragraph()
+    page_break_run = page_break_para.add_run()
+    page_break_run.add_break(WD_BREAK.PAGE)
+
+    # BIBLIOGRAPHY header
+    bib_para = doc.add_paragraph()
+    bib_run = bib_para.add_run("BIBLIOGRAPHY")
+    bib_run.font.name = 'Times New Roman'
+    bib_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+    bib_run.font.size = Pt(12)
+    bib_run.font.bold = True
+    bib_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    bib_para.paragraph_format.space_after = Pt(3)
+    bib_para.paragraph_format.space_before = Pt(16)
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 
-   name_line = f"{name}, {degree}".strip().rstrip(",")
-
-
-   # Name line
-   name_para = doc.add_paragraph()
-   name_run = name_para.add_run(name_line)
-   name_run.font.name = 'Times New Roman'
-   name_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-   name_run.font.size = Pt(12)
-   name_run.font.bold = True
-   name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-   name_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-   name_para.paragraph_format.space_before = Pt(0)
-   name_para.paragraph_format.space_after = Pt(0)
-
-
-   # Title line: Curriculum Vitae
-   title_para = doc.add_paragraph()
-   title_run = title_para.add_run("Curriculum Vitae")
-   title_run.font.name = 'Times New Roman'
-   title_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-   title_run.font.size = Pt(12)
-   title_run.font.bold = True
-   title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-   title_para.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-   title_para.paragraph_format.space_before = Pt(0)
-
-
-   # BUSINESS INFORMATION Header
-   biz_para = doc.add_paragraph()
-   biz_run = biz_para.add_run("BUSINESS INFORMATION")
-   biz_run.font.name = 'Times New Roman'
-   biz_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-   biz_run.font.size = Pt(12)
-   biz_run.font.bold = True
-   biz_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-   biz_para.paragraph_format.space_after = Pt(3)
-   biz_para.paragraph_format.space_before = Pt(16)
-
-
-   # BUSINESS INFORMATION entries
-   for entry in sorted(data.get("BUSINESS INFORMATION", []), key=lambda x: x["order"]):
-       company = entry.get("company_name", "").strip() or "Missing Company"
-       address = entry.get("business_address", "").strip() or "Missing Address"
-       phone = entry.get("business_phone", "").strip() or "Missing Phone"
-       email = entry.get("email", "").strip() or "Missing Email"
-
-
-       para = doc.add_paragraph()
-       para.paragraph_format.left_indent = Pt(18)
-
-
-       lines = [company, address, f"Phone: {phone}", f"Email: {email}"]
-      
-       for i, line in enumerate(lines):
-           if "Missing" in line:
-               before, after = line.split("Missing", 1)
-               para.add_run(before).font.name = 'Times New Roman'
-
-
-               red_run = para.add_run("Missing" + after)
-               red_run.font.name = 'Times New Roman'
-               red_run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
-           else:
-               para.add_run(line).font.name = 'Times New Roman'
-
-
-           if i < len(lines) - 1:
-               para.add_run().add_break()
-
-
-       para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-       para.paragraph_format.space_before= Pt(0)
-       para.paragraph_format.space_after = Pt(0)
-
-
-   # EDUCATION header
-   edu_para = doc.add_paragraph()
-   edu_run = edu_para.add_run("EDUCATION")
-   edu_run.font.name = 'Times New Roman'
-   edu_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-   edu_run.font.size = Pt(12)
-   edu_run.font.bold = True
-   edu_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-   edu_para.paragraph_format.space_after = Pt(3)
-   edu_para.paragraph_format.space_before = Pt(16)
-
-
-   # EDUCATION table with 3 columns
-   table = doc.add_table(rows=0, cols=3)
-
-
-   col_widths = [1.15, 1.50, 3.85]  # inches
-
-
-   for entry in sorted(data["EDUCATION"], key=lambda x: x["order"]):
-       year = entry.get("year", "").strip() or "Year Missing"
-       degree = entry.get("degree", "").strip() or "Degree Missing"
-       school = entry.get("school", "").strip() or "School Missing"
-
-
-       if not any([year, degree, school]):
-           continue
-
-
-       row_cells = table.add_row().cells
-       row_data = [year, degree, school]
-
-
-       for i, (cell, text) in enumerate(zip(row_cells, row_data)):
-           paragraph = cell.paragraphs[0]
-           run = paragraph.add_run(text)
-
-
-           if "Missing" in text:
-               run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
-
-
-           run.font.name = 'Times New Roman'
-           run.font.size = Pt(12)
-           paragraph.paragraph_format.space_after = Pt(0)
-           paragraph.paragraph_format.space_before = Pt(0)
-
-
-           # Set column width (in twips)
-           tc = cell._tc
-           tcPr = tc.get_or_add_tcPr()
-           tcW = OxmlElement('w:tcW')
-           tcW.set(qn('w:w'), str(int(col_widths[i] * 1440)))
-           tcW.set(qn('w:type'), 'dxa')
-           tcPr.append(tcW)
-
-
-   # Left indent for all table paragraphs
-   for row in table.rows:
-       for cell in row.cells:
-           for paragraph in cell.paragraphs:
-               paragraph.paragraph_format.left_indent = Pt(16)
-
-
-   # Page break before bibliography
-   page_break_para = doc.add_paragraph()
-   page_break_run = page_break_para.add_run()
-   page_break_run.add_break(WD_BREAK.PAGE)
-
-
-   # BIBLIOGRAPHY header
-   bib_para = doc.add_paragraph()
-   bib_run = bib_para.add_run("BIBLIOGRAPHY")
-   bib_run.font.name = 'Times New Roman'
-   bib_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-   bib_run.font.size = Pt(12)
-   bib_run.font.bold = True
-   bib_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-   bib_para.paragraph_format.space_after = Pt(3)
-   bib_para.paragraph_format.space_before = Pt(16)
-
-
-   buffer = BytesIO()
-   doc.save(buffer)
-   buffer.seek(0)
-   return buffer
-
-
+# ⬇️ Streamlit download button
 st.download_button(
-   label="Download CV",
-   data=generate_docx(st.session_state.cv_data),
-   file_name=f"{st.session_state.current_cv}.docx",
-   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    label="Download CV",
+    data=generate_docx(st.session_state.cv_data),
+    file_name=f"{st.session_state.current_cv}.docx",
+    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
