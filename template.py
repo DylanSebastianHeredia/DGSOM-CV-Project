@@ -7,7 +7,7 @@
 import streamlit as st              # Loads Streamlit GUI
 from docx import Document           # For working with .docx documents
 from docx.shared import Pt          # For setting font size
-from docx.shared import Inches      # To create tables and adjust horizontal spacing
+from docx.shared import RGBColor    # Edit text color in .docx
 from io import BytesIO              # To hold input/output memory for download
 from docx.enum.text import WD_ALIGN_PARAGRAPH       # To align text
 from docx.enum.text import WD_LINE_SPACING          # To adjust vertical line spacing 
@@ -28,17 +28,21 @@ if st.session_state.current_cv not in st.session_state.all_cvs:
     st.session_state.all_cvs[st.session_state.current_cv] = {
         "BUSINESS INFORMATION": [
             {"name": "", "position": "", "order": 1, "company_name": "",
-            "businee=ss_address": "", "business_phone": "", "email": "", },
+            "business_address": "", "business_phone": "", "email": "", },
         ],
-        "EDUCATION": [
-            {"degree": "", "year": "", "order": 1, "school": ""},      # Dictionary
+        "EDUCATION": [                                                 # Dictionary
+            {"degree": "", "year": "", "order": 1, "school": ""},      # List
         ]
     }
 
 # Make cv_data point to the currently selected CV
 st.session_state.cv_data = st.session_state.all_cvs[st.session_state.current_cv]
 
-st.title("UCLA DGSOM CV Formatter")     # Website title
+st.title("UCLA DGSOM CV Organizer")     # Website title
+
+st.sidebar.header("Login")
+st.sidebar.button("[Insert Login Here]")
+st.sidebar.markdown("---")
 
 # CV selection + creation (Sidebar Navigation)
 st.sidebar.header("CV Manager")
@@ -51,17 +55,96 @@ if selected_cv != st.session_state.current_cv:
     st.session_state.cv_data = st.session_state.all_cvs[selected_cv]
     st.rerun()
 
+# Creating a NEW CV to edit
 new_cv_name = st.sidebar.text_input("New CV name (no spaces):")
 if st.sidebar.button("Create New CV"):
     if new_cv_name and new_cv_name not in st.session_state.all_cvs:
-        st.session_state.all_cvs[new_cv_name] = {}
+        st.session_state.all_cvs[new_cv_name] = {
+            "BUSINESS INFORMATION": [
+                {"name": "", "position": "", "order": 1, "company_name": "",
+                 "business_address": "", "business_phone": "", "email": ""}
+            ],
+            "EDUCATION": [
+                {"degree": "", "year": "", "order": 1, "school": ""}
+            ]
+        }
         st.session_state.current_cv = new_cv_name
         st.session_state.cv_data = st.session_state.all_cvs[new_cv_name]
         st.success(f"New CV '{new_cv_name}' created.")
         st.rerun()
     else:
-        st.sidebar.warning("Enter a unique CV name.")      # Ensure no duplicates!
+        st.sidebar.warning("Enter a unique CV name.")
 
+# Rename CVs
+st.sidebar.header("Rename CV")
+with st.sidebar.expander("Rename CV"):
+    new_CVname = st.text_input("Enter new name", value=st.session_state.current_cv)
+    if st.button("Rename"):
+        if new_CVname and new_CVname != st.session_state.current_cv:
+            cvs = st.session_state.all_cvs
+            current = st.session_state.current_cv
+
+            # Prevent overwrite
+            if new_CVname in cvs:
+                st.warning("A CV with that name already exists.")
+            else:
+                # Rename
+                cvs[new_CVname] = cvs.pop(current)
+                st.session_state.current_cv = new_CVname
+                st.success(f"Renamed to '{new_CVname}'")
+                st.rerun()
+
+# Delete CV confirmation flag key in side bar
+delete_cv_flag_key = f"delete_confirm_cv_{st.session_state.current_cv}"
+
+st.sidebar.markdown("---")
+st.sidebar.header("Delete CV")
+
+# Prevent deleting Default_CV if you want
+if delete_cv_flag_key not in st.session_state:
+        st.session_state[delete_cv_flag_key] = False
+
+if not st.session_state[delete_cv_flag_key]:
+    if st.sidebar.button(f'Delete "{st.session_state.current_cv}"'):
+        st.session_state[delete_cv_flag_key] = True
+        st.rerun()
+else:
+    st.sidebar.write(f"Are you sure you want to delete '{st.session_state.current_cv}'?")
+    confirm = st.sidebar.button("Yes, delete")
+    cancel = st.sidebar.button("Cancel")
+    if confirm:
+        # Delete the CV
+        st.session_state.all_cvs.pop(st.session_state.current_cv, None)
+
+        # Reset current_cv to Default_CV or fallback
+        if "Default_CV" in st.session_state.all_cvs:
+            st.session_state.current_cv = "Default_CV"
+        elif len(st.session_state.all_cvs) > 0:
+            st.session_state.current_cv = list(st.session_state.all_cvs.keys())[0]
+        else:
+            # No CV left: recreate Default_CV
+            st.session_state.all_cvs["Default_CV"] = {
+                "BUSINESS INFORMATION": [
+                    {"name": "", "position": "", "order": 1, "company_name": "",
+                     "business_address": "", "business_phone": "", "email": ""}
+                ],
+                "EDUCATION": [
+                    {"degree": "", "year": "", "order": 1, "school": ""}                    ]
+            }
+            st.session_state.current_cv = "Default_CV"
+
+            # Update cv_data
+            st.session_state.cv_data = st.session_state.all_cvs[st.session_state.current_cv]
+
+            # Remove flag and refresh
+            st.session_state.pop(delete_cv_flag_key, None)
+            st.rerun()
+
+    if cancel:
+        st.session_state[delete_cv_flag_key] = False
+        st.rerun()
+
+# Start of UI display for CV related content
 st.header("BUSINESS INFORMATION")
 
 # Iterate over BUSINESS INFORMATION textboxes
@@ -71,7 +154,7 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
         with st.form(f"biz_form_{st.session_state.current_cv}_{i}"):
             new_name = st.text_input("Name", value=entry.get("name", ""), key=f"name_{st.session_state.current_cv}_{i}")
             new_position = st.text_input("Degree", value=entry.get("position", ""), key=f"position_{st.session_state.current_cv}_{i}")
-            new_company = st.text_input("Company Name", value=entry.get("busineess_address", ""), key=f"company_{st.session_state.current_cv}_{i}")
+            new_company = st.text_input("Company Name", value=entry.get("business_address", ""), key=f"company_{st.session_state.current_cv}_{i}")
             new_address = st.text_input("Business Address", value=entry.get("business_address", ""), key=f"address_{st.session_state.current_cv}_{i}")
             new_phone = st.text_input("Business Phone", value=entry.get("business_phone", ""), key=f"phone_{st.session_state.current_cv}_{i}")
             new_email = st.text_input("Email", value=entry.get("email", ""), key=f"email_{st.session_state.current_cv}_{i}")
@@ -87,16 +170,16 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
         
 st.header("EDUCATION")      # Header in GUI
 
-# EDUCATION: Incrementation + User input feature + Delete entry and confirmation for
+# EDUCATION: Incrementation + User input feature + Delete entry and confirmation
 for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
     degree_display = entry["degree"].strip() or ""
     year_display = entry["year"].strip() or ""
-    with st.expander(f"Entry {i+1}: {year_display} {degree_display}"):
-        with st.form(f"form_{st.session_state.current_cv}_{i}"):
+    with st.expander(f"Entry {i+1}: {year_display} {degree_display}"):      # Dropdown entries 
+        with st.form(f"form_{st.session_state.current_cv}_{i}"):            # Textboxes for content 
             new_degree = st.text_input("Degree", value=entry.get("degree", ""), key=f"degree_{st.session_state.current_cv}_degree_{i}")
             new_year = st.text_input("Year (Ex: 2000-2004)", value=entry.get("year", ""), key=f"year_{st.session_state.current_cv}_year_{i}")
             new_school = st.text_input("University Name", value=entry.get("school", ""), key=f"school_{st.session_state.current_cv}_school_{i}")
-            submitted = st.form_submit_button("Update Entry")
+            submitted = st.form_submit_button("Update Entry")               # Update button
 
             # Initialize delete confirmation flag if not present
             flag_key = f"delete_confirm_{st.session_state.current_cv}_{i}"
@@ -131,12 +214,12 @@ if st.button("Add Entry", key="add_entry_EDUCATION"):
     st.session_state.cv_data.setdefault("EDUCATION", []).append({
         "degree": "",
         "year": "",
+        "school": "",
         "order": len(st.session_state.cv_data.get("EDUCATION", [])) + 1
     })
     st.rerun()
 
 st.header("LECTURES AND PRESENTATIONS")
-
 
 
 st.header("BIBLIOGRAPHY")
@@ -147,7 +230,7 @@ st.header("BIBLIOGRAPHY")
 def generate_docx(data):
     doc = Document()
     
-    # Try to pull first name entry (or default if missing)
+    # Try to pull first name entry 
     biz_info = data.get("BUSINESS INFORMATION", [])
     name = biz_info[0]["name"].strip()
     degree = biz_info[0].get("position", "").strip() 
@@ -190,27 +273,35 @@ def generate_docx(data):
 
     # BUSINESS INFORMATION entries
     for entry in sorted(data.get("BUSINESS INFORMATION", []), key=lambda x: x["order"]):
-        company = entry.get("company_name", "").strip() or "Company Missing"
-        address = entry.get("business_address", "").strip() or "Address Missing"
-        phone = entry.get("business_phone", "").strip() or "Phone Missing"
-        email = entry.get("email", "").strip() or "Email Missing"
+        company = entry.get("company_name", "").strip() or "Missing Company"
+        address = entry.get("business_address", "").strip() or "Missing Address"
+        phone = entry.get("business_phone", "").strip() or "Missing Phone"
+        email = entry.get("email", "").strip() or "Missing Email"
 
         para = doc.add_paragraph()
         para.paragraph_format.left_indent = Pt(18)
 
         lines = [company, address, f"Phone: {phone}", f"Email: {email}"]
-
+        
         for i, line in enumerate(lines):
-            run = para.add_run(line)
-            run.font.name = 'Times New Roman'
-            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-            run.font.size = Pt(12)
+            if "Missing" in line:
+                before, after = line.split("Missing", 1)
+                para.add_run(before).font.name = 'Times New Roman'
+
+                red_run = para.add_run("Missing" + after)
+                red_run.font.name = 'Times New Roman'
+                red_run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
+            else:
+                para.add_run(line).font.name = 'Times New Roman'
+
+            # Add line break if not last line
             if i < len(lines) - 1:
-                run.add_break()
+                para.add_run().add_break()
 
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT
         para.paragraph_format.space_before= Pt(0)
         para.paragraph_format.space_after = Pt(0)
+
         
     # EDUCATION section header
     edu_para = doc.add_paragraph()
@@ -229,21 +320,17 @@ def generate_docx(data):
     para.paragraph_format.left_indent = Pt(18)          # Match Business Info indentation
     
     # Set column width in inches
-    col_widths = [1.15, 0.5, 4.85]  # 8.5" - (1" margin x 2) = 6.5" usable
+    col_widths = [1.15, 1.50, 3.85]  # 8.5" - (1" margin x 2) = 6.5" usable
 
    # Add data rows for EDUCATION
     for entry in sorted(data["EDUCATION"], key=lambda x: x["order"]):
-        year = entry["year"].strip()
-        degree = entry["degree"].strip()
-        school = entry["school"].strip()
+        year = entry.get("year", "").strip() or "Year Missing"
+        degree = entry.get("degree", "").strip() or "Degree Missing"
+        school = entry.get("school", "").strip() or "School Missing"
 
         # Skip completely blank entries
         if not any([year, degree, school]):
             continue
-
-        year = year or "Year (missing)"
-        degree = degree or "Degree (missing)"
-        school = school or "School (missing)"
 
         row_cells = table.add_row().cells
         row_data = [year, degree, school]
@@ -252,6 +339,10 @@ def generate_docx(data):
             # Set cell text
             paragraph = cell.paragraphs[0]
             run = paragraph.add_run(text)
+
+            if "Missing" in text:   # Make text after that containts "Missing" be red
+                run.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
+
             run.font.name = 'Times New Roman'
             run.font.size = Pt(12)
             paragraph.paragraph_format.space_after = Pt(0)
@@ -293,11 +384,9 @@ def generate_docx(data):
     buffer.seek(0)  # Rewind the buffer to the beginning
     return buffer
 
-if st.button("Export as .docx"):
-    docx_buffer = generate_docx(st.session_state.cv_data)
-    st.download_button(
-        label="Download CV",
-        data=docx_buffer,
-        file_name=f"{st.session_state.current_cv}.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+st.download_button(
+    label="Download CV",
+    data=generate_docx(st.session_state.cv_data),
+    file_name=f"{st.session_state.current_cv}.docx",
+    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
