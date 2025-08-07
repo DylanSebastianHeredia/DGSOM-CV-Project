@@ -67,8 +67,23 @@ if not firebase_admin._apps:
    })
 
 
+# Saving to Firebase
 def save_to_firebase():
    db.reference("cvs").set(st.session_state.all_cvs)
+
+
+# Moving Entry Order
+def move_entry_in_section(section: str, index: int, direction: int):
+    """Move an entry up or down in any CV section list."""
+    entries = st.session_state.cv_data.get(section, [])
+    new_index = index + direction
+    if 0 <= new_index < len(entries):
+        entries[index], entries[new_index] = entries[new_index], entries[index]
+        # Update the 'order' fields to match the new list order
+        for i, entry in enumerate(entries):
+            entry["order"] = i + 1
+        save_to_firebase()
+        st.rerun()
 
 
 if "all_cvs" not in st.session_state:
@@ -220,7 +235,7 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
            new_address = st.text_input("Business Address", value=entry.get("business_address", ""), key=f"address_{st.session_state.current_cv}_{i}")
            new_phone = st.text_input("Business Phone", value=entry.get("business_phone", ""), key=f"phone_{st.session_state.current_cv}_{i}")
            new_email = st.text_input("Email", value=entry.get("email", ""), key=f"email_{st.session_state.current_cv}_{i}")
-           submitted = st.form_submit_button("Update Entry")
+           submitted = st.form_submit_button("Save")
            if submitted:
                entry["name"] = new_name
                entry["position"] = new_position
@@ -236,70 +251,83 @@ for i, entry in enumerate(st.session_state.cv_data.get("BUSINESS INFORMATION", [
 # EDUCATION Section
 st.header("EDUCATION")
 
+section_key = "EDUCATION"
+entries = st.session_state.cv_data[section_key]
 
-for i, entry in enumerate(st.session_state.cv_data["EDUCATION"]):
-   degree_display = entry["degree"].strip() or ""
-   year_display = entry["year"].strip() or ""
-   with st.expander(f"Entry {i+1}: {year_display} {degree_display}"):
-       with st.form(f"form_{st.session_state.current_cv}_{i}"):
-           new_degree = st.text_input("Degree", value=entry.get("degree", ""), key=f"degree_{st.session_state.current_cv}_degree_{i}")
-           new_year = st.text_input("Year (Ex: 2000-2004)", value=entry.get("year", ""), key=f"year_{st.session_state.current_cv}_year_{i}")
-           new_school = st.text_input("University Name", value=entry.get("school", ""), key=f"school_{st.session_state.current_cv}_school_{i}")
-           submitted = st.form_submit_button("Update Entry")
+for i, entry in enumerate(entries):
+    # Set initial display values from entry (before editing)
+    year_display = entry.get("year", "").strip() or ""
+    degree_display = entry.get("degree", "").strip() or ""
 
+    # Create form for editing this entry inside the expander
+    with st.expander(f"Entry {i+1}: {year_display} {degree_display}"):
+        with st.form(f"{section_key}_form_{i}"):
+            new_degree = st.text_input("Degree", value=entry.get("degree", ""), key=f"{section_key}_degree_{i}")
+            new_year = st.text_input("Year (Ex: 2000-2004)", value=entry.get("year", ""), key=f"{section_key}_year_{i}")
+            new_school = st.text_input("University Name", value=entry.get("school", ""), key=f"{section_key}_school_{i}")
 
-           flag_key = f"delete_confirm_{st.session_state.current_cv}_{i}"
-           if flag_key not in st.session_state:
-               st.session_state[flag_key] = False
+            col1, col2, col3, col4 = st.columns([0.75, 1, 1.5, 1.5])
+            with col1:
+                if st.form_submit_button("⬆ Up"):
+                    move_entry_in_section(section_key, i, -1)
+                    st.rerun()
+            with col2:
+                if st.form_submit_button("⬇ Down"):
+                    move_entry_in_section(section_key, i, 1)
+                    st.rerun()
+            with col3:
+                delete_key = f"delete_confirm_{section_key}_{i}"
+                if delete_key not in st.session_state:
+                    st.session_state[delete_key] = False
+                if not st.session_state[delete_key]:
+                    if st.form_submit_button("Delete Entry"):
+                        st.session_state[delete_key] = True
+                        st.rerun()
+                else:
+                    st.warning("Are you sure you want to delete this entry?")
+                    confirm = st.form_submit_button("Yes, delete")
+                    cancel = st.form_submit_button("Cancel")
+                    if confirm:
+                        entries.pop(i)
+                        st.session_state.pop(delete_key, None)
+                        save_to_firebase()
+                        st.rerun()
+                    if cancel:
+                        st.session_state[delete_key] = False
+                        st.rerun()
+            with col4:
+                if st.form_submit_button("Save"):
+                    entry["degree"] = new_degree
+                    entry["year"] = new_year
+                    entry["school"] = new_school
+                    save_to_firebase()
 
+                    # Immediately update display vars for the label
+                    year_display = new_year.strip() or ""
+                    degree_display = new_degree.strip() or ""
+                    st.rerun()  # Rerun to update the expander label
 
-           if not st.session_state[flag_key]:
-               delete_clicked = st.form_submit_button("Delete Entry")
-               if delete_clicked:
-                   st.session_state[flag_key] = True
-                   st.rerun()
-           else:
-               st.write("Are you sure you want to delete this entry?")
-               confirm = st.form_submit_button("Yes, delete")
-               cancel = st.form_submit_button("Cancel")
-               if confirm:
-                   st.session_state.cv_data["EDUCATION"].pop(i)
-                   st.session_state.pop(flag_key, None)
-                   save_to_firebase()
-                   st.rerun()
-               if cancel:
-                   st.session_state[flag_key] = False
-                   st.rerun()
+# Add new education entry button
+if st.button("Add Entry"):
+    entries = st.session_state.cv_data.get("EDUCATION", [])
+    new_order = max([e.get("order", 0) for e in entries], default=0) + 1
+    entries.append({"degree": "", "year": "", "school": "", "order": new_order})
+    save_to_firebase()
+    st.rerun()
 
+st.divider()
 
-           if submitted:
-               entry["degree"] = new_degree
-               entry["year"] = new_year
-               entry["school"] = new_school
-               save_to_firebase()
-               st.rerun()
-
-
-if st.button("Add Entry", key="add_entry_EDUCATION"):
-   st.session_state.cv_data.setdefault("EDUCATION", []).append({
-       "degree": "",
-       "year": "",
-       "school": "",
-       "order": len(st.session_state.cv_data.get("EDUCATION", [])) + 1
-   })
-   save_to_firebase()
-   st.rerun()
-
-
-st.header("LECTURES AND PRESENTATIONS")
-st.header("BIBLIOGRAPHY")
-
-
-
+st.subheader(f"Export {st.session_state.current_cv}")
 
 # Generate .docx and download button
+
 def generate_docx(data):
     doc = Document()
+    
+    style = doc.styles['Normal']
+    style.font.name = 'Times New Roman'
+    style.font.size = Pt(12)
+    style._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
 
     # Pull first business info entry for name/degree
     biz_info = data.get("BUSINESS INFORMATION", [])
@@ -310,6 +338,7 @@ def generate_docx(data):
     name_line = f"{name}, {degree}".strip().rstrip(",")
     last_updated_line = f"{updated}".strip().rstrip(",")
 
+    # Title containing Name + Degree(s), CV, Last Updated Date on separate lines
     lines = [
         {"text": name_line, "bold": True, "italic": False},
         {"text": "Curriculum Vitae", "bold": True, "italic": False},
@@ -337,12 +366,11 @@ def generate_docx(data):
     biz_run.font.size = Pt(12)
     biz_run.font.bold = True
     biz_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    biz_para.paragraph_format.space_after = Pt(3)
+    biz_para.paragraph_format.space_after = Pt(4)
     biz_para.paragraph_format.space_before = Pt(16)
 
     # BUSINESS INFORMATION entries
     for entry in sorted(data.get("BUSINESS INFORMATION", []), key=lambda x: x["order"]):
-        updated = entry.get("last_updated", "").strip() or "Missing Updated Date"
         company = entry.get("company_name", "").strip() or "Missing Company"
         address = entry.get("business_address", "").strip() or "Missing Address"
         phone = entry.get("business_phone", "").strip() or "Missing Phone"
@@ -350,7 +378,7 @@ def generate_docx(data):
 
         para = doc.add_paragraph()
         para.paragraph_format.left_indent = Pt(18)
-        lines = [updated, company, address, f"Phone: {phone}", f"Email: {email}"]
+        lines = [company, address, f"Phone: {phone}", f"Email: {email}"]
 
         for i, line in enumerate(lines):
             if "Missing" in line:
@@ -376,12 +404,12 @@ def generate_docx(data):
     edu_run.font.size = Pt(12)
     edu_run.font.bold = True
     edu_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    edu_para.paragraph_format.space_after = Pt(3)
+    edu_para.paragraph_format.space_after = Pt(4)
     edu_para.paragraph_format.space_before = Pt(16)
 
     # EDUCATION table with 3 columns
     table = doc.add_table(rows=0, cols=3)
-    col_widths = [1.15, 1.50, 3.85]  # inches
+    col_widths = [1.50, 1.60, 3.40]  # Total 6.5" (2x with 1" margins)
 
     for entry in sorted(data["EDUCATION"], key=lambda x: x["order"]):
         year = entry.get("year", "").strip() or "Year Missing"
@@ -416,31 +444,16 @@ def generate_docx(data):
     for row in table.rows:
         for cell in row.cells:
             for paragraph in cell.paragraphs:
-                paragraph.paragraph_format.left_indent = Pt(16)
+                paragraph.paragraph_format.left_indent = Pt(18)
 
-    # Page break before bibliography
-    page_break_para = doc.add_paragraph()
-    page_break_run = page_break_para.add_run()
-    page_break_run.add_break(WD_BREAK.PAGE)
-
-    # BIBLIOGRAPHY header
-    bib_para = doc.add_paragraph()
-    bib_run = bib_para.add_run("BIBLIOGRAPHY")
-    bib_run.font.name = 'Times New Roman'
-    bib_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-    bib_run.font.size = Pt(12)
-    bib_run.font.bold = True
-    bib_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    bib_para.paragraph_format.space_after = Pt(3)
-    bib_para.paragraph_format.space_before = Pt(16)
-
+# Resetting pointer to beginning of page
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
 
-# ⬇️ Streamlit download button
+# Streamlit download button
 st.download_button(
     label="Download CV",
     data=generate_docx(st.session_state.cv_data),
